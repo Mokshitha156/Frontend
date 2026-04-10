@@ -1,5 +1,5 @@
 import streamlit as st
-from components.tabs import module_tabs
+from src.modules.audit_trail.components.tabs import module_tabs
 
 def module_detail():
     code, name = st.session_state.selected_module

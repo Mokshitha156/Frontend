@@ -1,5 +1,5 @@
 import streamlit as st
-from views.module_detail import module_detail
+from src.modules.audit_trail.views.module_detail import module_detail
 
 MODULES = {
     "A - Clinical Data": [

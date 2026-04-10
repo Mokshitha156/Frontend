@@ -1,7 +1,7 @@
 # dashboards/admin_dashboard.py
 import streamlit as st
-from components.sidebar import sidebar
-from components.charts import patient_line_chart, appointment_donut_chart
+from src.modules.audit_trail.components.sidebar import sidebar
+from src.modules.audit_trail.components.charts import patient_line_chart, appointment_donut_chart
 
 def admin_dashboard():
     # ---------- Session Defaults ----------

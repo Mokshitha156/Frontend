@@ -1,7 +1,9 @@
 # dashboards/patient_dashboard.py
 import streamlit as st
-from components.sidebar import sidebar
-from components.charts import patient_line_chart, appointment_donut_chart
+from src.modules.audit_trail.patient_view import patient_view
+from src.modules.audit_trail.components.sidebar import sidebar
+from src.modules.audit_trail.components.charts import patient_line_chart, appointment_donut_chart
+
 
 # All categories and their modules
 CATEGORIES = {
@@ -128,11 +130,129 @@ CATEGORIES = {
         ]
     }
 }
+def show_audit_dashboard():
+    import streamlit as st
+    from src.modules.audit_trail.patient_view import patient_view
+    from src.modules.audit_trail.database import db
+    from src.modules.audit_trail.services import get_report, detect_all_patterns
+
+    st.title("📊 Clinical Audit Trail & Logging System")
+
+    tab = st.radio(
+        "",
+        [
+            "🏠 Home",
+            "👤 Patient System",
+            "📜 Audit Logs",
+            "🚨 Suspicious Patterns",
+            "📊 Audit Report",
+            "🔐 Integrity Check"
+        ],
+        horizontal=True
+    )
+
+    st.divider()
+
+    # ---------------- HOME ----------------
+    if tab == "🏠 Home":
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 🔽 Input Entities")
+            st.success("Patient Data (Name, Age)")
+            st.success("Appointment Request")
+            st.success("User Actions (VIEW / CREATE)")
+        with col2:
+            st.markdown("### 🔼 Output Entities")
+            st.success("Patient Records")
+            st.success("Appointment Records")
+            st.success("Audit Logs")
+            st.success("Suspicious Patterns")
+            st.success("Audit Reports")
+        st.divider()
+        st.subheader("📌 System Features")
+        st.write("✔ Activity Logging")
+        st.write("✔ Tamper-proof Audit Logs")
+        st.write("✔ Suspicious Activity Detection")
+        st.write("✔ Compliance Reporting")
+
+    # ---------------- PATIENT SYSTEM ----------------
+    elif tab == "👤 Patient System":
+        patient_view()
+
+    # ---------------- AUDIT LOGS ----------------
+    elif tab == "📜 Audit Logs":
+        st.subheader("Audit Logs")
+
+        logs = db["audit_logs"].find({}, {"_id": 0})
+        found = False
+
+        for log in logs:
+            st.json(log)
+            found = True
+
+        if not found:
+            st.info("No logs available")
+
+    # ---------------- PATTERNS ----------------
+    elif tab == "🚨 Suspicious Patterns":
+        if st.button("Run Detection"):
+            patterns = detect_all_patterns()
+
+            if patterns:
+                st.success(f"{len(patterns)} patterns detected")
+                for p in patterns:
+                    st.json(p)
+            else:
+                st.info("No suspicious patterns detected")
+
+        st.divider()
+
+        st.subheader("Stored Patterns")
+        for p in db["suspicious_patterns"].find({}, {"_id": 0}):
+            st.json(p)
+
+    # ---------------- REPORT ----------------
+    elif tab == "📊 Audit Report":
+        report = get_report()
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Logs", report["total_logs"])
+        col2.metric("Success", report["success"])
+        col3.metric("Failure", report["failure"])
+
+        st.divider()
+        st.subheader("User Activity")
+        st.json(report["user_activity"])
+
+    # ---------------- INTEGRITY ----------------
+    elif tab == "🔐 Integrity Check":
+        logs = list(db["audit_logs"].find({}, {"_id": 0}))
+
+        valid = True
+        prev_hash = "0"
+
+        for log in logs:
+            if log.get("previous_hash") != prev_hash:
+                valid = False
+                break
+            prev_hash = log.get("current_hash")
+
+        if valid:
+            st.success("✅ Logs are tamper-proof")
+        else:
+            st.error("❌ Integrity check failed")
+
+        st.info("Ensures logs cannot be modified without detection.")
 
 def patient_dashboard():
-    st.session_state.setdefault("view", "main")
-    st.session_state.setdefault("selected_category", None)
-    st.session_state.setdefault("selected_module", None)
+    if "view" not in st.session_state:
+        st.session_state.view = "main"
+    if "selected_category" not in st.session_state:
+        st.session_state.selected_category = None
+    if "selected_module" not in st.session_state:
+        st.session_state.selected_module = None
+    if "last_sidebar" not in st.session_state:
+        st.session_state.last_sidebar = None
 
     # Sidebar
     selected = sidebar([
@@ -149,14 +269,16 @@ def patient_dashboard():
     ])
 
     # Handle sidebar selection
-    if selected != "Dashboard" and selected in CATEGORIES:
-        st.session_state.selected_category = selected
-        st.session_state.view = "category"
-        st.session_state.selected_module = None
-    elif selected == "Dashboard":
-        st.session_state.view = "main"
-        st.session_state.selected_category = None
-        st.session_state.selected_module = None
+    if selected != st.session_state.last_sidebar:
+        st.session_state.last_sidebar = selected
+        if selected != "Dashboard" and selected in CATEGORIES:
+            st.session_state.selected_category = selected
+            st.session_state.view = "category"
+            st.session_state.selected_module = None
+        elif selected == "Dashboard":
+            st.session_state.view = "main"
+            st.session_state.selected_category = None
+            st.session_state.selected_module = None
 
     # ROUTER
     if st.session_state.view == "category":
@@ -357,14 +479,23 @@ def show_category_view():
         st.session_state.view = "main"
         st.rerun()
 
+
+# ---------------- MODULE VIEW ----------------
 def show_module_detail():
     code, name, desc, tables, records = st.session_state.selected_module
     cat_key = st.session_state.selected_category
-    
+
+    # 🔥 IMPORTANT: ONLY G3 HAS SPECIAL DASHBOARD
+    if code == "G3":
+        show_audit_dashboard()
+    return
+
     # Breadcrumb
     st.markdown(f"Category {cat_key.split('-')[0].strip()} > {name}")
     st.markdown(f"# {name}")
     st.markdown(f"*{desc}*")
+    
+    
     
     # Tabs
     tab = st.radio("", ["🏠 Home", "🔗 ER Diagram", "📋 Tables", "🔍 SQL Query", "⚡ Triggers", "📊 Output"], horizontal=True)
@@ -449,3 +580,4 @@ END;
     if st.button("⬅ Back to Modules"):
         st.session_state.view = "category"
         st.rerun()
+
